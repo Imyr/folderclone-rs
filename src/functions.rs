@@ -47,7 +47,6 @@ pub async fn create_folder(folder_name: String, parent_id: String) -> String {
         name: Some(folder_name),
         parents: Some(vec![parent_id]),
         mime_type: Some("application/vnd.google-apps.folder".to_owned()),
-        // parents: 
         ..Default::default()
     };
     generate_hub("sa").await
