@@ -52,8 +52,6 @@ jobs:
         cargo build --release &&
         mv target/release/clone release/clone-linux-gnu-x86_64 &&
         cargo install cross --git https://github.com/cross-rs/cross &&
-        sudo apt-get install qemu binfmt-support qemu-user-static &&
-        docker run --privileged --rm tonistiigi/binfmt --install all &&
         cargo clean &&
         rustup target install aarch64-unknown-linux-gnu &&
         cross build --release --target aarch64-unknown-linux-gnu &&
