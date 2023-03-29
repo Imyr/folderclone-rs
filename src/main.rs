@@ -1,32 +1,12 @@
 use async_recursion::async_recursion;
 
-
 mod functions;
 
-use functions::{create_folder, copy_file};
-
-static mut TREE: Vec<DriveUnit> = Vec::new();
-
-#[derive(Debug)]
-struct DriveFile {
-    name: String,
-    id: String
-}
-#[derive(Debug)]
-struct DriveFolder {
-    name: String,
-    id: String
-}
-#[derive(Debug)]
-struct DriveUnit {
-    key: DriveFolder,
-    value: Vec<DriveFile>
-}
+use functions::{create_folder, copy_file, generate_hub};
 
 #[async_recursion]
 async fn list_files(fldr_str: String, fldr_id: String, new_root_id: String) {
     let root_id = create_folder((&fldr_str).to_owned(), new_root_id).await;
-
     let files = functions::generate_hub("sa").await.files().list()
     .supports_all_drives(true)
     .include_items_from_all_drives(true)
@@ -34,31 +14,24 @@ async fn list_files(fldr_str: String, fldr_id: String, new_root_id: String) {
     .page_size(1000)
     .doit().await.unwrap();
     let mut handles = vec![];
-    let mut file_list: Vec<DriveFile> = Vec::new();
-    for i in files.1.files.unwrap() {
-        if i.trashed == None {
-            if !(i.mime_type.unwrap() == "application/vnd.google-apps.folder")  {
-                let entry = DriveFile {
-                    name: i.name.unwrap(),
-                    id: i.id.unwrap()
-                };
-                file_list.push(entry);
+    for entity in files.1.files.unwrap() {
+        if entity.trashed == None {
+            if !(entity.mime_type.unwrap() == "application/vnd.google-apps.folder")  {
+                handles.push(tokio::spawn(copy_file(entity.id.unwrap(), (&root_id).to_string())));
             }
             else {
-                let entry = DriveFolder {
-                    name: i.name.unwrap(),
-                    id: i.id.unwrap(), 
-                };
-                handles.push(tokio::spawn(list_files((&(entry.name)).to_owned(), (&(entry.id)).to_owned(), (&root_id).to_string())));
+                handles.push(tokio::spawn(list_files(entity.name.unwrap(), entity.id.unwrap(), (&root_id).to_string())));
     }}}
-    for file in file_list {
-        handles.push(tokio::spawn(copy_file(file.id, (&root_id).to_string())));
-    }
     futures::future::join_all(handles).await;
 }
 
 
 #[tokio::main]
 async fn main() {
-    list_files("Hynix".to_string(), "1_7FBfok1ia6ZyFIg12OTSI2pC_6The83".to_string(), "1A9xl_-cNkLg1E0RwXnp8H1zQGq1Uvlth".to_string()).await;
+    let folder_id_to_copy = "1nsjsxwRHgsgvzcZsQ8AucAZRUtQyQDCF";
+    let destination_root_folder_id = "1A9xl_-cNkLg1E0RwXnp8H1zQGq1Uvlth";
+    let source_folder_name = generate_hub("sa").await.files().get(folder_id_to_copy)
+    .supports_all_drives(true)
+    .doit().await.unwrap().1.name.unwrap();
+    list_files(source_folder_name, folder_id_to_copy.to_string(), destination_root_folder_id.to_string()).await;
 }

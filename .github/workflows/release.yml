@@ -1,0 +1,97 @@
+name: Release binaries for all platforms
+on:
+  push:
+    branches:
+      - main
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          fetch-depth: 0
+    - name: Get latest tag
+      id: previous_tag
+      uses: "WyriHaximus/github-action-get-previous-tag@v1"
+    - name: Build Windows binaries
+      run:
+        mkdir release &&
+        cargo build --release &&
+        move target/release/clone.exe release/clone-windows-msvc-x86_64.exe &&
+        cargo clean &&
+        rustup target install i686-pc-windows-msvc &&
+        cargo build --release --target i686-pc-windows-msvc &&
+        move target/i686-pc-windows-msvc/release/clone.exe release/clone-windows-msvc-i686.exe &&
+        cargo clean &&
+        rustup target install aarch64-pc-windows-msvc &&
+        cargo build --release --target aarch64-pc-windows-msvc && 
+        move target/aarch64-pc-windows-msvc/release/clone.exe release/clone-windows-msvc-aarch64.exe
+    - uses: softprops/action-gh-release@v1
+      with:
+        body: This release and its artifacts were built by a GitHub Action
+        tag_name: ${{ steps.previous_tag.outputs.tag }}
+        files: |
+          release/clone-windows-msvc-aarch64.exe
+          release/clone-windows-msvc-x86_64.exe
+          release/clone-windows-msvc-i686.exe         
+  release-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          fetch-depth: 0
+    - name: Get latest tag
+      id: previous_tag
+      uses: "WyriHaximus/github-action-get-previous-tag@v1"
+    - name: Build Linux binaries
+      run:
+        mkdir release &&
+        cargo build --release &&
+        mv target/release/clone release/clone-linux-gnu-x86_64 &&
+        cargo install cross --git https://github.com/cross-rs/cross &&
+        sudo apt-get install qemu binfmt-support qemu-user-static &&
+        docker run --privileged --rm tonistiigi/binfmt --install all &&
+        cargo clean &&
+        rustup target install aarch64-unknown-linux-gnu &&
+        cross build --release --target aarch64-unknown-linux-gnu &&
+        mv target/aarch64-unknown-linux-gnu/release/clone release/clone-linux-gnu-aarch64 &&
+        cargo clean &&
+        rustup target install aarch64-linux-android &&
+        cross build --release --target aarch64-linux-android &&
+        mv target/aarch64-linux-android/release/clone release/clone-linux-android-aarch64
+    - uses: softprops/action-gh-release@v1
+      with:
+        body: This release and its artifacts were built by a GitHub Action
+        tag_name: ${{ steps.previous_tag.outputs.tag }}
+        files: |
+          release/clone-linux-gnu-x86_64
+          release/clone-linux-gnu-aarch64
+          release/clone-linux-android-aarch64
+  release-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          fetch-depth: 0
+    - name: Get latest tag
+      id: previous_tag
+      uses: "WyriHaximus/github-action-get-previous-tag@v1"
+    - name: Build macOS binaries
+      run:
+        mkdir release &&
+        rustup target install aarch64-apple-darwin &&
+        cargo build --release &&
+        mv ./target/release/clone ./release/clone-apple-darwin-x86_64 &&
+        cargo clean &&
+        cargo build --release --target aarch64-apple-darwin &&
+        mv ./target/aarch64-apple-darwin/release/clone ./release/clone-apple-darwin-aarch64
+    - uses: softprops/action-gh-release@v1
+      with:
+        body: This release and its artifacts were built by a GitHub Action
+        tag_name: ${{ steps.previous_tag.outputs.tag }}
+        files: |
+          release/clone-apple-darwin-x86_64
+          release/clone-apple-darwin-aarch64    
