@@ -1,7 +1,7 @@
 use google_drive3::api::File;
 use rand::seq::IteratorRandom;
-use async_recursion::async_recursion;
 use tokio::time::{sleep, Duration};
+use async_recursion::async_recursion;
 use google_drive3::{oauth2, DriveHub};
 use google_drive3::hyper::client::HttpConnector;
 use google_drive3::hyper_rustls::HttpsConnector;
@@ -45,21 +45,62 @@ pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpCon
 
 #[async_recursion]
 pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
-    match generate_hub("sa").await.files().list()
+    let living_hub = generate_hub("sa").await;
+    match living_hub.files().list()
     .supports_all_drives(true)
     .include_items_from_all_drives(true)
-    .q(format!("'{}' in parents", parent_id).as_str())
+    .q(format!("'{}' in parents", &parent_id).as_str())
     .page_size(1000)
     .doit().await {
-        Ok(o) => o.1.files.unwrap(),
+        Ok(o) => {
+            if !(o.1.next_page_token == None) {
+                let mut list = o.1.files.unwrap();
+                let mut page_token_option = o.1.next_page_token;
+                while page_token_option != None {
+                    let mut next_list = match living_hub.files().list()
+                    .supports_all_drives(true)
+                    .include_items_from_all_drives(true)
+                    .q(format!("'{}' in parents", &parent_id).as_str())
+                    .page_size(1000).page_token(page_token_option.unwrap().as_str())
+                    .doit().await {
+                        Ok(o) => {
+                            if o.1.next_page_token == None {
+                                page_token_option = None;
+                                o.1.files.unwrap()         
+                            }
+                            else {
+                                page_token_option = o.1.next_page_token;
+                                o.1.files.unwrap()
+                            }
+                        },
+                        Err(e) => {
+                            if retries > 0 {
+                                eprintln!("Retrying: Listing Files (Next Page) in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                                sleep(Duration::from_secs(4)).await;
+                                return list_folder(parent_id, retries-1).await;
+                            }
+                            else {
+                                eprintln!("Failure: Listing Files (Next Page) in '{}': {}", parent_id, e);
+                                panic!()
+                            }
+                        },
+                    };
+                    list.append(&mut next_list);
+                }
+                list  
+            }
+            else {
+                o.1.files.unwrap()
+            }
+        },
         Err(e) => {
             if retries > 0 {
-                eprintln!("Retrying: 'Listing Files' in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                eprintln!("Retrying: Listing Files in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
                 sleep(Duration::from_secs(4)).await;
                 list_folder(parent_id, retries-1).await
             }
             else {
-                eprintln!("Failure: 'Listing Files' in '{}': {}", parent_id, e);
+                eprintln!("Failure: Listing Files in '{}': {}", parent_id, e);
                 panic!()
             }
         },
@@ -82,12 +123,12 @@ pub async fn create_folder(folder_name: String, parent_id: String, retries: i8) 
         Ok(o) => o.1.id.unwrap(),
         Err(e) => {
             if retries > 0 {
-                eprintln!("Retrying: 'New Folder Creation' in '{}': Waiting for 2 seconds: {} tries left", parent_id, retries-1);
+                eprintln!("Retrying: New Folder Creation in '{}': Waiting for 2 seconds: {} tries left", parent_id, retries-1);
                 sleep(Duration::from_secs(2)).await;
                 create_folder(folder_name, parent_id, retries-1).await
             }
             else {
-                eprint!("Failure: 'New Folder Creation' in '{}': {}", parent_id, e);
+                eprint!("Failure: New Folder Creation in '{}': {}", parent_id, e);
                 panic!()
             }
         },
