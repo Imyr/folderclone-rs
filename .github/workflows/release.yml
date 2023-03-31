@@ -25,9 +25,10 @@ jobs:
         rustup target install i686-pc-windows-msvc &&
         cargo build --release --target i686-pc-windows-msvc &&
         move target/i686-pc-windows-msvc/release/clone.exe release/clone-windows-msvc-i686.exe &&
+        cargo install cross --git https://github.com/cross-rs/cross &&
         cargo clean &&
         rustup target install aarch64-pc-windows-msvc &&
-        cargo build --release --target aarch64-pc-windows-msvc && 
+        cross build --release --target aarch64-pc-windows-msvc && 
         move target/aarch64-pc-windows-msvc/release/clone.exe release/clone-windows-msvc-aarch64.exe
     - uses: softprops/action-gh-release@v1
       with:

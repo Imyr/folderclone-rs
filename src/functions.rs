@@ -11,35 +11,35 @@ use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClien
 async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector<HttpConnector>> {
     let sa_key =  match oauth2::read_service_account_key(json_path).await {
         Err(e) => {
-            eprintln!("Failure: 'Key Extraction from JSON': {}", e);
+            eprintln!("Failure: Key Extraction from JSON: {}", e);
             panic!()
         }
         Ok(o) => {
-            // println!("done: key extraction from json");
+            // println!("Done: Key Extraction from JSON");
             o
         }
     };
     match ServiceAccountAuthenticator::builder(sa_key).build().await {
         Err(e) => {
-            eprintln!("Failure: 'Authenticator Generation': {}", e);
+            eprintln!("Failure: Authenticator Generation: {}", e);
             panic!()
         }
         Ok(o) => {
-            // println!("done: authenticator generation");
+            // println!("Done: Authenticator Generation");
             o
         }
     } 
 }
 
 async fn generate_drive_service(auth: Authenticator<HttpsConnector<HttpConnector>>) -> DriveHub<HttpsConnector<HttpConnector>>{
-    // println!("done: drive hub generation");
+    // println!("Done: Drive Hub Generation");
     DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)                                  
 }
 
 pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpConnector>> {
     let mut rng = rand::rngs::OsRng;
     let choice = std::fs::read_dir(path_to_json).unwrap().choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
-    // println!("selected {}", choice);
+    // println!("Using SA {}", choice);
     generate_drive_service(generate_authenticator(choice.as_str()).await).await
 }
 
@@ -77,7 +77,7 @@ pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
                             if retries > 0 {
                                 eprintln!("Retrying: Listing Files (Next Page) in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
                                 sleep(Duration::from_secs(4)).await;
-                                return list_folder(parent_id, retries-1).await;
+                                return list_folder(parent_id, retries-1).await
                             }
                             else {
                                 eprintln!("Failure: Listing Files (Next Page) in '{}': {}", parent_id, e);
