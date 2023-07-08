@@ -20,18 +20,18 @@ jobs:
       run:
         mkdir release &&
         cargo build --release &&
-        move target/release/clone.exe release/clone-windows-msvc-x86_64.exe &&
+        move target/release/folderclone.exe release/folderclone-windows-msvc-x86_64.exe &&
         cargo clean &&
         rustup target install i686-pc-windows-msvc &&
         cargo build --release --target i686-pc-windows-msvc &&
-        move target/i686-pc-windows-msvc/release/clone.exe release/clone-windows-msvc-i686.exe
+        move target/i686-pc-windows-msvc/release/folderclone.exe release/folderclone-windows-msvc-i686.exe
     - uses: softprops/action-gh-release@v1
       with:
         body: This release and its artifacts were built by a GitHub Action
         tag_name: ${{ steps.previous_tag.outputs.tag }}
         files: |
-          release/clone-windows-msvc-x86_64.exe
-          release/clone-windows-msvc-i686.exe         
+          release/folderclone-windows-msvc-x86_64.exe
+          release/folderclone-windows-msvc-i686.exe         
   release-linux:
     runs-on: ubuntu-latest
     steps:
@@ -45,24 +45,24 @@ jobs:
       run:
         mkdir release &&
         cargo build --release &&
-        mv target/release/clone release/clone-linux-gnu-x86_64 &&
+        mv target/release/folderclone release/folderclone-linux-gnu-x86_64 &&
         cargo install cross --git https://github.com/cross-rs/cross &&
         cargo clean &&
         rustup target install aarch64-unknown-linux-gnu &&
         cross build --release --target aarch64-unknown-linux-gnu &&
-        mv target/aarch64-unknown-linux-gnu/release/clone release/clone-linux-gnu-aarch64 &&
+        mv target/aarch64-unknown-linux-gnu/release/folderclone release/folderclone-linux-gnu-aarch64 &&
         cargo clean &&
         rustup target install aarch64-linux-android &&
         cross build --release --target aarch64-linux-android &&
-        mv target/aarch64-linux-android/release/clone release/clone-linux-android-aarch64
+        mv target/aarch64-linux-android/release/folderclone release/folderclone-linux-android-aarch64
     - uses: softprops/action-gh-release@v1
       with:
         body: This release and its artifacts were built by a GitHub Action
         tag_name: ${{ steps.previous_tag.outputs.tag }}
         files: |
-          release/clone-linux-gnu-x86_64
-          release/clone-linux-gnu-aarch64
-          release/clone-linux-android-aarch64
+          release/folderclone-linux-gnu-x86_64
+          release/folderclone-linux-gnu-aarch64
+          release/folderclone-linux-android-aarch64
   release-macos:
     runs-on: macos-latest
     steps:
@@ -77,14 +77,14 @@ jobs:
         mkdir release &&
         rustup target install aarch64-apple-darwin &&
         cargo build --release &&
-        mv ./target/release/clone ./release/clone-apple-darwin-x86_64 &&
+        mv ./target/release/folderclone ./release/folderclone-apple-darwin-x86_64 &&
         cargo clean &&
         cargo build --release --target aarch64-apple-darwin &&
-        mv ./target/aarch64-apple-darwin/release/clone ./release/clone-apple-darwin-aarch64
+        mv ./target/aarch64-apple-darwin/release/folderclone ./release/folderclone-apple-darwin-aarch64
     - uses: softprops/action-gh-release@v1
       with:
         body: This release and its artifacts were built by a GitHub Action
         tag_name: ${{ steps.previous_tag.outputs.tag }}
         files: |
-          release/clone-apple-darwin-x86_64
-          release/clone-apple-darwin-aarch64    
+          release/folderclone-apple-darwin-x86_64
+          release/folderclone-apple-darwin-aarch64    
