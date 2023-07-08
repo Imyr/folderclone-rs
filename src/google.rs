@@ -1,6 +1,7 @@
 use google_drive3::api::File;
 use rand::seq::IteratorRandom;
 use tokio::time::{sleep, Duration};
+use log::{info, warn, debug, error};
 use async_recursion::async_recursion;
 use google_drive3::{oauth2, DriveHub};
 use google_drive3::hyper::client::HttpConnector;
@@ -11,41 +12,48 @@ use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClien
 async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector<HttpConnector>> {
     let sa_key =  match oauth2::read_service_account_key(json_path).await {
         Err(e) => {
-            eprintln!("Failure: Key Extraction from JSON: {}", e);
+            error!("Failure: Key Extraction from JSON: {:#?}", e);
             panic!()
         }
         Ok(o) => {
-            // println!("Done: Key Extraction from JSON");
+            debug!("Done: Key Extraction from JSON");
             o
         }
     };
     match ServiceAccountAuthenticator::builder(sa_key).build().await {
         Err(e) => {
-            eprintln!("Failure: Authenticator Generation: {}", e);
+            error!("Failure: Authenticator Generation: {:#?}", e);
             panic!()
         }
         Ok(o) => {
-            // println!("Done: Authenticator Generation");
+            debug!("Done: Authenticator Generation");
             o
         }
     } 
 }
 
 async fn generate_drive_service(auth: Authenticator<HttpsConnector<HttpConnector>>) -> DriveHub<HttpsConnector<HttpConnector>>{
-    // println!("Done: Drive Hub Generation");
+    debug!("Done: Drive Hub Generation");
     DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)                                  
 }
 
 pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpConnector>> {
     let mut rng = rand::rngs::OsRng;
-    let choice = std::fs::read_dir(path_to_json).unwrap().choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
-    // println!("Using SA {}", choice);
+    let dir_list = match std::fs::read_dir(path_to_json) {
+        Ok(o) => o,
+        Err(e) => {
+            error!("Failure: Reading Service Account Directory '{}': {:#?}", crate::PATH, e);
+            panic!()
+        },
+    };
+    let choice = dir_list.choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
+    debug!("Using SA {}", choice);
     generate_drive_service(generate_authenticator(choice.as_str()).await).await
 }
 
 #[async_recursion]
 pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
-    let living_hub = generate_hub("sa").await;
+    let living_hub = generate_hub(crate::PATH).await;
     match living_hub.files().list()
     .supports_all_drives(true)
     .include_items_from_all_drives(true)
@@ -75,32 +83,34 @@ pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
                         },
                         Err(e) => {
                             if retries > 0 {
-                                eprintln!("Retrying: Listing Files (Next Page) in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                                warn!("Retrying: Listing Files (Next Page) in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
                                 sleep(Duration::from_secs(4)).await;
                                 return list_folder(parent_id, retries-1).await
                             }
                             else {
-                                eprintln!("Failure: Listing Files (Next Page) in '{}': {}", parent_id, e);
+                                error!("Failure: Listing Files (Next Page) in '{}': {:#?}", parent_id, e);
                                 panic!()
                             }
                         },
                     };
                     list.append(&mut next_list);
                 }
+                info!("Done: Listing Files in '{}'", parent_id);
                 list  
             }
             else {
+                info!("Done: Listing Files in '{}'", parent_id);
                 o.1.files.unwrap()
             }
         },
         Err(e) => {
             if retries > 0 {
-                eprintln!("Retrying: Listing Files in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                warn!("Retrying: Listing Files in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
                 sleep(Duration::from_secs(4)).await;
                 list_folder(parent_id, retries-1).await
             }
             else {
-                eprintln!("Failure: Listing Files in '{}': {}", parent_id, e);
+                error!("Failure: Listing Files in '{}': {:#?}", parent_id, e);
                 panic!()
             }
         },
@@ -115,20 +125,24 @@ pub async fn create_folder(folder_name: String, parent_id: String, retries: i8) 
         mime_type: Some("application/vnd.google-apps.folder".to_owned()),
         ..Default::default()
     };
-    match generate_hub("sa").await
+    match generate_hub(crate::PATH).await
         .files().create(new)
         .supports_all_drives(true)
         .upload(std::io::empty(), "*/*".parse().unwrap())
         .await {
-        Ok(o) => o.1.id.unwrap(),
+        Ok(o) => {
+            let id = o.1.id.unwrap();
+            info!("Done: New Folder Creation '{}'", id);
+            id
+        },
         Err(e) => {
             if retries > 0 {
-                eprintln!("Retrying: New Folder Creation in '{}': Waiting for 2 seconds: {} tries left", parent_id, retries-1);
+                warn!("Retrying: New Folder Creation in '{}': Waiting for 2 seconds: {} tries left", parent_id, retries-1);
                 sleep(Duration::from_secs(2)).await;
                 create_folder(folder_name, parent_id, retries-1).await
             }
             else {
-                eprint!("Failure: New Folder Creation in '{}': {}", parent_id, e);
+                error!("Failure: New Folder Creation in '{}': {:#?}", parent_id, e);
                 panic!()
             }
         },
@@ -141,21 +155,23 @@ pub async fn copy_file(file_id: String, destination_id: String, retries: i8) -> 
         parents: Some(vec![destination_id.clone()]),
         ..Default::default()                    
     };
-    match generate_hub("sa").await
+    match generate_hub(crate::PATH).await
         .files().copy(new, &file_id)
         .supports_all_drives(true).doit().await {
-        Ok(o) => o.1.id.unwrap(),
+        Ok(o) => {
+            info!("Done: File Copy '{}'", file_id);
+            o.1.id.unwrap()
+        },
         Err(e) => {
             if retries > 0 {
-                eprintln!("Retrying: File Copy '{}': Waiting for 3 seconds: {} tries left", file_id, retries-1);
-                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                warn!("Retrying: File Copy '{}': Waiting for 3 seconds: {} tries left", file_id, retries-1);
+                sleep(Duration::from_secs(3)).await;
                 copy_file(file_id, destination_id, retries-1).await
             }
             else {
-                eprint!("Failure: File Copy '{}': {}", file_id, e);
+                error!("Failure: File Copy '{}': {:#?}", file_id, e);
                 panic!()
             }
         },
     }
-    // println!("Done: File Copy '{}'", file_id);
 }
