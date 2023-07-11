@@ -12,28 +12,28 @@ use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClien
 async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector<HttpConnector>> {
     let sa_key =  match oauth2::read_service_account_key(json_path).await {
         Err(e) => {
-            error!("Failure: Key Extraction from JSON: {:#?}", e);
+            error!("Key extraction from JSON: {}", e);
             panic!()
         }
         Ok(o) => {
-            debug!("Done: Key Extraction from JSON");
+            debug!("Key extracted from JSON");
             o
         }
     };
     match ServiceAccountAuthenticator::builder(sa_key).build().await {
         Err(e) => {
-            error!("Failure: Authenticator Generation: {:#?}", e);
+            error!("Authenticator creation: {}", e);
             panic!()
         }
         Ok(o) => {
-            debug!("Done: Authenticator Generation");
+            debug!("Authenticator generated");
             o
         }
     } 
 }
 
 async fn generate_drive_service(auth: Authenticator<HttpsConnector<HttpConnector>>) -> DriveHub<HttpsConnector<HttpConnector>>{
-    debug!("Done: Drive Hub Generation");
+    debug!("Drive hub generated");
     DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)                                  
 }
 
@@ -42,7 +42,7 @@ pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpCon
     let dir_list = match std::fs::read_dir(path_to_json) {
         Ok(o) => o,
         Err(e) => {
-            error!("Failure: Reading Service Account Directory '{}': {:#?}", crate::PATH, e);
+            error!("Service accounts directory '{}': {}", crate::PATH, e);
             panic!()
         },
     };
@@ -83,34 +83,34 @@ pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
                         },
                         Err(e) => {
                             if retries > 0 {
-                                warn!("Retrying: Listing Files (Next Page) in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                                warn!("Folder listing '{}': {}", parent_id, e);
                                 sleep(Duration::from_secs(4)).await;
                                 return list_folder(parent_id, retries-1).await
                             }
                             else {
-                                error!("Failure: Listing Files (Next Page) in '{}': {:#?}", parent_id, e);
+                                error!("Folder listing '{}': {}", parent_id, e);
                                 panic!()
                             }
                         },
                     };
                     list.append(&mut next_list);
                 }
-                info!("Done: Listing Files in '{}'", parent_id);
+                info!("Folder listed '{}'", parent_id);
                 list  
             }
             else {
-                info!("Done: Listing Files in '{}'", parent_id);
+                info!("Folder listed '{}'", parent_id);
                 o.1.files.unwrap()
             }
         },
         Err(e) => {
             if retries > 0 {
-                warn!("Retrying: Listing Files in '{}': Waiting for 4 seconds: {} tries left", parent_id, retries-1);
+                warn!("Folder listing '{}': {}", parent_id, e);
                 sleep(Duration::from_secs(4)).await;
                 list_folder(parent_id, retries-1).await
             }
             else {
-                error!("Failure: Listing Files in '{}': {:#?}", parent_id, e);
+                error!("Folder listing '{}': {}", parent_id, e);
                 panic!()
             }
         },
@@ -132,17 +132,17 @@ pub async fn create_folder(folder_name: String, parent_id: String, retries: i8) 
         .await {
         Ok(o) => {
             let id = o.1.id.unwrap();
-            info!("Done: New Folder Creation '{}'", id);
+            info!("Folder created '{}'", id);
             id
         },
         Err(e) => {
             if retries > 0 {
-                warn!("Retrying: New Folder Creation in '{}': Waiting for 2 seconds: {} tries left", parent_id, retries-1);
+                warn!("Folder creation in '{}': {}", parent_id, e);
                 sleep(Duration::from_secs(2)).await;
                 create_folder(folder_name, parent_id, retries-1).await
             }
             else {
-                error!("Failure: New Folder Creation in '{}': {:#?}", parent_id, e);
+                error!("Folder creation in '{}': {}", parent_id, e);
                 panic!()
             }
         },
@@ -159,17 +159,17 @@ pub async fn copy_file(file_id: String, destination_id: String, retries: i8) -> 
         .files().copy(new, &file_id)
         .supports_all_drives(true).doit().await {
         Ok(o) => {
-            info!("Done: File Copy '{}'", file_id);
+            info!("File copied '{}'", file_id);
             o.1.id.unwrap()
         },
         Err(e) => {
             if retries > 0 {
-                warn!("Retrying: File Copy '{}': Waiting for 3 seconds: {} tries left", file_id, retries-1);
+                warn!("File copy '{}': {}", file_id, e);
                 sleep(Duration::from_secs(3)).await;
                 copy_file(file_id, destination_id, retries-1).await
             }
             else {
-                error!("Failure: File Copy '{}': {:#?}", file_id, e);
+                error!("File copy '{}': {}", file_id, e);
                 panic!()
             }
         },

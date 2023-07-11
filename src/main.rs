@@ -48,12 +48,12 @@ async fn main() {
                                     .supports_all_drives(true).doit().await {
                 Ok(o) => {
                     let source_folder_name = o.1.name.unwrap();
-                    info!("{}", format!("Copying: {} ({}) to {}", source_folder_name, source, destination));
+                    info!("{}", format!("Copying {} ({}) to {}", source_folder_name, source, destination));
                     let parent_id = copy(source_folder_name.to_owned(), source.to_owned(), destination.to_owned()).await;            
                     info!("Copied {} ({}) to {}.", source_folder_name, source, parent_id);
                 }
                 Err(e) => {
-                    error!("Failure: Folder Name Retrieval of '{}': {:#?}", source.as_str(), e);
+                    error!("Folder name retrieval of '{}': {}", source, e);
                 },
             };       
         }
