@@ -7,45 +7,38 @@ use google_drive3::{oauth2, DriveHub};
 use google_drive3::hyper::client::HttpConnector;
 use google_drive3::hyper_rustls::HttpsConnector;
 use google_drive3::oauth2::ServiceAccountAuthenticator;
-use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClient, Authenticator};
+use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClient};
 
-async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector<HttpConnector>> {
-    let sa_key =  match oauth2::read_service_account_key(json_path).await {
-        Err(e) => {
-            panic!("Key extraction from JSON: {}", e);
-        }
+
+pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpConnector>> {
+    let mut rng = rand::rngs::OsRng;
+    
+    let dir_list = match std::fs::read_dir(path_to_json) {
+        Ok(o) => o,
+        Err(e) => panic!("Service accounts directory '{}': {}", crate::PATH, e),
+    };
+    
+    let choice = dir_list.choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
+    debug!("Using SA {}", choice);
+    
+    let sa_key =  match oauth2::read_service_account_key(choice.as_str()).await {
+        Err(e) => panic!("Key extraction from JSON: {}", e),
         Ok(o) => {
             debug!("Key extracted from JSON");
             o
         }
     };
-    match ServiceAccountAuthenticator::builder(sa_key).build().await {
-        Err(e) => {
-            panic!("Authenticator creation: {}", e);
-        }
+
+    let auth = match ServiceAccountAuthenticator::builder(sa_key).build().await {
+        Err(e) => panic!("Authenticator creation: {}", e),
         Ok(o) => {
             debug!("Authenticator generated");
             o
         }
-    } 
-}
-
-async fn generate_drive_service(auth: Authenticator<HttpsConnector<HttpConnector>>) -> DriveHub<HttpsConnector<HttpConnector>>{
-    debug!("Drive hub generated");
-    DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)                                  
-}
-
-pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpConnector>> {
-    let mut rng = rand::rngs::OsRng;
-    let dir_list = match std::fs::read_dir(path_to_json) {
-        Ok(o) => o,
-        Err(e) => {
-            panic!("Service accounts directory '{}': {}", crate::PATH, e);
-        },
     };
-    let choice = dir_list.choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
-    debug!("Using SA {}", choice);
-    generate_drive_service(generate_authenticator(choice.as_str()).await).await
+    
+    debug!("Drive hub generated");
+    DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)    
 }
 
 #[async_recursion]
@@ -128,7 +121,7 @@ pub async fn create_folder(folder_name: String, parent_id: String, retries: u8) 
         .upload(std::io::empty(), "*/*".parse().unwrap())
         .await {
         Ok(o) => {
-            info!("Folder created '{}'", parent_id);
+            info!("Folder created '{}'", o.1.id.clone().unwrap());
             o.1.id
         },
         Err(e) => {
