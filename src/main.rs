@@ -5,6 +5,8 @@ use clap::{Parser, Subcommand};
 use async_recursion::async_recursion;
 
 pub const PATH: &str = "accounts";
+pub const RETRIES: u8 = 2;
+pub const SLEEP: u64 = 3;
 
 mod google;
 use google::{create_folder, copy_file, generate_hub, list_folder};
@@ -12,7 +14,10 @@ use google::{create_folder, copy_file, generate_hub, list_folder};
 #[derive(Subcommand)]
 enum Commands {
     /// Copy from Source ID to inside Destination ID
-    Copy {source: String, destination: String},
+    Copy {
+        source: String, 
+        destination: String,
+    },
 }
 
 /// Clone utility developed by House of the Alchemist
@@ -23,19 +28,23 @@ struct Cli {
 }
 
 #[async_recursion]
-async fn copy(fldr_str: String, fldr_id: String, new_parent_id: String) -> String {
-    let parent_id = create_folder((&fldr_str).to_owned(), new_parent_id, 5).await;
-    let mut handles: Vec<JoinHandle<String>> = Vec::new();
-    for entity in list_folder(fldr_id, 5).await {
+async fn copy(fldr_str: String, fldr_id: String, new_parent_id: String) -> Option<String> {
+    let parent_id = create_folder((&fldr_str).to_owned(), new_parent_id, RETRIES).await.unwrap();
+    let mut handles: Vec<JoinHandle<Option<String>>> = Vec::new();
+    let folders = list_folder(fldr_id, RETRIES).await;
+    if folders.is_none() {
+        return Some(parent_id)
+    }
+    for entity in folders.unwrap() {
         if entity.trashed == None {
             if !(entity.mime_type.unwrap() == "application/vnd.google-apps.folder")  {
-                handles.push(tokio::spawn(copy_file(entity.id.unwrap(), (&parent_id).to_string(), 3)));
+                handles.push(tokio::spawn(copy_file(entity.id.unwrap(), (&parent_id).to_string(), RETRIES)));
             }
             else {
                 handles.push(tokio::spawn(copy(entity.name.unwrap(), entity.id.unwrap(), (&parent_id).to_string())));
     }}}
     join_all(handles).await;
-    parent_id
+    Some(parent_id)
 }
 
 
@@ -48,9 +57,9 @@ async fn main() {
                                     .supports_all_drives(true).doit().await {
                 Ok(o) => {
                     let source_folder_name = o.1.name.unwrap();
-                    info!("{}", format!("Copying {} ({}) to {}", source_folder_name, source, destination));
+                    info!("Copying {} ({}) to {}", source_folder_name, source, destination);
                     let parent_id = copy(source_folder_name.to_owned(), source.to_owned(), destination.to_owned()).await;            
-                    info!("Copied {} ({}) to {}.", source_folder_name, source, parent_id);
+                    info!("Copied {} ({}) to {}.", source_folder_name, source, parent_id.unwrap());
                 }
                 Err(e) => {
                     error!("Folder name retrieval of '{}': {}", source, e);

@@ -12,8 +12,7 @@ use google_drive3::oauth2::authenticator::{HyperClientBuilder, DefaultHyperClien
 async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector<HttpConnector>> {
     let sa_key =  match oauth2::read_service_account_key(json_path).await {
         Err(e) => {
-            error!("Key extraction from JSON: {}", e);
-            panic!()
+            panic!("Key extraction from JSON: {}", e);
         }
         Ok(o) => {
             debug!("Key extracted from JSON");
@@ -22,8 +21,7 @@ async fn generate_authenticator(json_path: &str) -> Authenticator<HttpsConnector
     };
     match ServiceAccountAuthenticator::builder(sa_key).build().await {
         Err(e) => {
-            error!("Authenticator creation: {}", e);
-            panic!()
+            panic!("Authenticator creation: {}", e);
         }
         Ok(o) => {
             debug!("Authenticator generated");
@@ -42,8 +40,7 @@ pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpCon
     let dir_list = match std::fs::read_dir(path_to_json) {
         Ok(o) => o,
         Err(e) => {
-            error!("Service accounts directory '{}': {}", crate::PATH, e);
-            panic!()
+            panic!("Service accounts directory '{}': {}", crate::PATH, e);
         },
     };
     let choice = dir_list.choose(&mut rng).unwrap().unwrap().path().to_str().unwrap().to_owned();
@@ -52,7 +49,7 @@ pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpCon
 }
 
 #[async_recursion]
-pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
+pub async fn list_folder(parent_id: String, retries: u8) -> Option<Vec<File>> {
     let living_hub = generate_hub(crate::PATH).await;
     match living_hub.files().list()
     .supports_all_drives(true)
@@ -84,41 +81,41 @@ pub async fn list_folder(parent_id: String, retries: i8) -> Vec<File> {
                         Err(e) => {
                             if retries > 0 {
                                 warn!("Folder listing '{}': {}", parent_id, e);
-                                sleep(Duration::from_secs(4)).await;
+                                sleep(Duration::from_secs(crate::SLEEP)).await;
                                 return list_folder(parent_id, retries-1).await
                             }
                             else {
                                 error!("Folder listing '{}': {}", parent_id, e);
-                                panic!()
+                                return None
                             }
                         },
                     };
                     list.append(&mut next_list);
                 }
                 info!("Folder listed '{}'", parent_id);
-                list  
+                Some(list)  
             }
             else {
                 info!("Folder listed '{}'", parent_id);
-                o.1.files.unwrap()
+                o.1.files
             }
         },
         Err(e) => {
             if retries > 0 {
                 warn!("Folder listing '{}': {}", parent_id, e);
-                sleep(Duration::from_secs(4)).await;
+                sleep(Duration::from_secs(crate::SLEEP)).await;
                 list_folder(parent_id, retries-1).await
             }
             else {
                 error!("Folder listing '{}': {}", parent_id, e);
-                panic!()
+                None
             }
         },
     }
 }
 
 #[async_recursion]
-pub async fn create_folder(folder_name: String, parent_id: String, retries: i8) -> String {
+pub async fn create_folder(folder_name: String, parent_id: String, retries: u8) -> Option<String> {
     let new = File {
         name: Some(folder_name.clone()),
         parents: Some(vec![parent_id.clone()]),
@@ -131,26 +128,25 @@ pub async fn create_folder(folder_name: String, parent_id: String, retries: i8) 
         .upload(std::io::empty(), "*/*".parse().unwrap())
         .await {
         Ok(o) => {
-            let id = o.1.id.unwrap();
-            info!("Folder created '{}'", id);
-            id
+            info!("Folder created '{}'", parent_id);
+            o.1.id
         },
         Err(e) => {
             if retries > 0 {
                 warn!("Folder creation in '{}': {}", parent_id, e);
-                sleep(Duration::from_secs(2)).await;
+                sleep(Duration::from_secs(crate::SLEEP)).await;
                 create_folder(folder_name, parent_id, retries-1).await
             }
             else {
                 error!("Folder creation in '{}': {}", parent_id, e);
-                panic!()
+                None
             }
         },
     }
 }
 
 #[async_recursion]
-pub async fn copy_file(file_id: String, destination_id: String, retries: i8) -> String {
+pub async fn copy_file(file_id: String, destination_id: String, retries: u8) -> Option<String> {
     let new = File {
         parents: Some(vec![destination_id.clone()]),
         ..Default::default()                    
@@ -160,17 +156,17 @@ pub async fn copy_file(file_id: String, destination_id: String, retries: i8) -> 
         .supports_all_drives(true).doit().await {
         Ok(o) => {
             info!("File copied '{}'", file_id);
-            o.1.id.unwrap()
+            o.1.id
         },
         Err(e) => {
             if retries > 0 {
                 warn!("File copy '{}': {}", file_id, e);
-                sleep(Duration::from_secs(3)).await;
+                sleep(Duration::from_secs(crate::SLEEP)).await;
                 copy_file(file_id, destination_id, retries-1).await
             }
             else {
                 error!("File copy '{}': {}", file_id, e);
-                panic!()
+                None
             }
         },
     }
