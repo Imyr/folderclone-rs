@@ -22,20 +22,17 @@ pub async fn generate_hub(path_to_json: &str) -> DriveHub<HttpsConnector<HttpCon
     debug!("Using SA {}", choice);
     
     let sa_key =  match oauth2::read_service_account_key(choice.as_str()).await {
+        Ok(o) => o,
         Err(e) => panic!("Key extraction from JSON: {}", e),
-        Ok(o) => {
-            debug!("Key extracted from JSON");
-            o
-        }
     };
+    debug!("Key extracted from JSON");
 
     let auth = match ServiceAccountAuthenticator::builder(sa_key).build().await {
+        Ok(o) => o,
         Err(e) => panic!("Authenticator creation: {}", e),
-        Ok(o) => {
-            debug!("Authenticator generated");
-            o
-        }
+        
     };
+    debug!("Authenticator generated");
     
     debug!("Drive hub generated");
     DriveHub::new(HyperClientBuilder::build_hyper_client(DefaultHyperClient), auth)    
