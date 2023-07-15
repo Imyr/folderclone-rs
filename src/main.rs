@@ -56,10 +56,16 @@ async fn main() {
             match generate_hub(PATH).await.files().get(source.as_str())
                                     .supports_all_drives(true).doit().await {
                 Ok(o) => {
-                    let source_folder_name = o.1.name.unwrap();
-                    info!("Copying {} ({}) to {}", source_folder_name, source, destination);
-                    let parent_id = copy(source_folder_name.to_owned(), source.to_owned(), destination.to_owned()).await;            
-                    info!("Copied {} ({}) to {}.", source_folder_name, source, parent_id.unwrap());
+                let source_name = o.1.name.unwrap();
+                    if o.1.mime_type.unwrap() == "application/vnd.google-apps.folder" {
+                        info!("Copying {} ({}) to {}", source_name, source, destination);
+                        let id = copy(source_name.to_owned(), source.to_owned(), destination.to_owned()).await;            
+                        info!("Copied {} ({}) to {}.", source_name, source, id.unwrap());
+                    } else {
+                        info!("Copying {} ({}) to {}", source_name, source, destination);
+                        let id = copy_file(source.to_owned(), destination.to_owned(), RETRIES).await;
+                        info!("Copied {} ({}) to {}.", source_name, source, id.unwrap());
+                    }
                 }
                 Err(e) => {
                     error!("Folder name retrieval of '{}': {}", source, e);
